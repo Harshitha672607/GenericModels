@@ -1,10 +1,10 @@
-name: Generic Data Loader
+name: 1Generic Data Loader
 description: Downloads a CSV file from a CDN, splits it into train/test datasets, and generates dataset metadata for multiple model types (Linear Regression, Logistic Regression, Random Forest)
 
 inputs:
   - {name: cdn_url, type: String, description: 'CDN URL to download CSV file'}
   - {name: target_column, type: String, description: 'Target column name'}
-  - {name: model_type, type: String, description: 'Model type: linear_regression, logistic_regression, or random_forest'}
+  - {name: model_config, type: String, description: 'Model configuration as JSON string containing model_type and parameters'}
   - {name: train_split, type: Float, description: 'Train split ratio (default 0.75)'}
   - {name: shuffle_seed, type: Integer, description: 'Random seed for shuffling'}
 
@@ -25,6 +25,7 @@ implementation:
         import os
         import sys
         import io
+        import json
         import pandas as pd
         import numpy as np
         import requests
@@ -34,14 +35,28 @@ implementation:
 
         cdn_url = sys.argv[1]
         target_column = sys.argv[2]
-        model_type = sys.argv[3]
+        model_config_str = sys.argv[3]
         train_split = float(sys.argv[4])
         shuffle_seed = int(sys.argv[5])
         train_data_path = sys.argv[6]
         test_data_path = sys.argv[7]
         dataset_info_path = sys.argv[8]
 
-        print('Generic CSV Loader - Model Type:', model_type)
+        print('Generic CSV Loader - Processing Model Configuration')
+
+        # Parse model configuration to extract model_type
+        try:
+            model_config = json.loads(model_config_str)
+            model_type = model_config.get('model_type', 'random_forest')
+            print(f'Successfully parsed model configuration: {model_type}')
+            print(f'Full model config: {model_config}')
+        except Exception as e:
+            print(f'Error parsing model config: {e}')
+            print('Using default model: random_forest')
+            model_type = 'random_forest'
+            model_config = {'model_type': 'random_forest'}
+
+        print(f'Model Type: {model_type}')
         print(f'CDN URL: {cdn_url}')
         print(f'Target column: {target_column}')
         print(f'Train split: {train_split}')
@@ -70,6 +85,8 @@ implementation:
             problem_type = 'regression'
         else:
             problem_type = 'classification'
+
+        print(f'Problem Type: {problem_type}')
 
         # Check target variable
         target_unique = df[target_column].nunique()
@@ -150,6 +167,7 @@ implementation:
             'target_distribution': df[target_column].value_counts().to_dict() if problem_type == 'classification' else {},
             'problem_type': problem_type,
             'model_type': model_type,
+            'model_config': model_config,
             'dataset_name': 'employee_performance',
             'used_stratified_split': can_stratify if problem_type == 'classification' else False
         }
@@ -180,7 +198,7 @@ implementation:
     args:
       - {inputValue: cdn_url}
       - {inputValue: target_column}
-      - {inputValue: model_type}
+      - {inputValue: model_config}
       - {inputValue: train_split}
       - {inputValue: shuffle_seed}
       - {outputPath: train_data}
