@@ -25,10 +25,7 @@ inputs:
     type: String
     description: 'Type of model to use'
     default: 'linear_regression'
-    options:
-      - 'linear_regression'
-      - 'logistic_regression'
-      - 'random_forest'
+
 
 outputs:
   - name: train_data
