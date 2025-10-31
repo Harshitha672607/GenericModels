@@ -1,4 +1,4 @@
-name: 78Generic Load Dataset
+name: 785Generic Load Dataset
 description: Loads data and handles different model types automatically
 inputs:
   - name: cdn_url
