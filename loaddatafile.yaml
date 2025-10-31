@@ -1,4 +1,4 @@
-name: 3Generic Load Dataset
+name: Generic Load Dataset
 description: Loads data and handles different model types automatically with enhanced validation
 inputs:
   - name: cdn_url
@@ -51,7 +51,7 @@ implementation:
         from urllib.parse import unquote
         from sklearn.model_selection import train_test_split
 
-        # Get input arguments - CORRECTED: starting from $0
+        # Get input arguments - FIXED: sys.argv[0] is the script name, so we start from 1
         cdn_url = sys.argv[1]
         target_column = sys.argv[2]
         train_split = float(sys.argv[3])
@@ -231,7 +231,7 @@ implementation:
         print(f'Train data saved at: {train_data_path}')
         print(f'Test data saved at: {test_data_path}')
         print(f'Problem type: {problem_type}')
-        " "$0" "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8"
+        " "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9"
     args:
       - {inputValue: cdn_url}
       - {inputValue: target_column}
