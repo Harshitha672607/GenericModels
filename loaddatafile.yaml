@@ -1,4 +1,4 @@
-name: Genericloaddataset123
+name: 1Genericloaddataset123
 description: Loads data and handles different model types automatically with enhanced validation
 inputs:
   - name: cdn_url
@@ -48,10 +48,10 @@ implementation:
         import requests
         import pickle
         import json
-        import warnings
+        
         from urllib.parse import unquote
         from sklearn.model_selection import train_test_split
-        warnings.filterwarnings("ignore", category=DeprecationWarning)
+  
         # Enhanced model configurations
         MODEL_CONFIGS = {
             'linear_regression': {
