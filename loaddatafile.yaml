@@ -1,4 +1,4 @@
-name: 8Generic Load Dataset
+name: 7Generic Load Dataset
 description: Loads data and handles different model types automatically
 inputs:
   - name: cdn_url
@@ -51,6 +51,12 @@ implementation:
         from urllib.parse import unquote
         from sklearn.model_selection import train_test_split
 
+        # Debug: Print all arguments to see what's being passed
+        print('=== DEBUG: Arguments received ===')
+        for i, arg in enumerate(sys.argv):
+            print(f'sys.argv[{i}]: {arg}')
+
+        # Get input arguments - CORRECT ORDER
         cdn_url = sys.argv[1]
         target_column = sys.argv[2]
         train_split = float(sys.argv[3])
@@ -107,6 +113,7 @@ implementation:
             response.raise_for_status()
             df = pd.read_csv(io.BytesIO(response.content))
             print(f'Loaded CSV with shape: {df.shape}')
+            print(f'Columns: {list(df.columns)}')
         except Exception as e:
             print(f'Failed to load dataset: {e}')
             raise
@@ -189,9 +196,9 @@ implementation:
         print('Dataset processing complete!')
         print(f'Train data saved at: {train_data_path}')
         print(f'Test data saved at: {test_data_path}')
-        print(f'Dataset info keys: {list(dataset_info.keys())}')
+        print(f'Dataset info saved at: {dataset_info_path}')
         print(f'Model config saved at: {model_config_path}')
-        " "$0" "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8"
+        " "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9"
     args:
       - {inputValue: cdn_url}
       - {inputValue: target_column}
