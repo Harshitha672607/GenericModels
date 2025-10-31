@@ -204,7 +204,9 @@ implementation:
 
         # Enhanced feature analysis
         feature_columns = [col for col in df.columns if col != target_column]
-        numeric_features = df[feature_columns].select_dtypes(include=[np.number]).columns.tolist()
+        
+        numeric_features = df[feature_columns].select_dtypes(include=["number"]).columns.tolist()
+
         categorical_features = df[feature_columns].select_dtypes(include=['object', 'category']).columns.tolist()
 
         # Data splitting with enhanced stratification
