@@ -48,9 +48,10 @@ implementation:
         import requests
         import pickle
         import json
+        import warnings
         from urllib.parse import unquote
         from sklearn.model_selection import train_test_split
-
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
         # Enhanced model configurations
         MODEL_CONFIGS = {
             'linear_regression': {
