@@ -1,4 +1,4 @@
-name: 09Generic Load Dataset
+name: 78Generic Load Dataset
 description: Loads data and handles different model types automatically
 inputs:
   - name: cdn_url
@@ -51,74 +51,39 @@ implementation:
         from urllib.parse import unquote
         from sklearn.model_selection import train_test_split
 
-        print('=== STARTING GENERIC DATA LOADER ===')
+        print('=== GENERIC DATA LOADER STARTED ===')
         
-        # Print ALL environment variables to debug
-        print('=== ENVIRONMENT VARIABLES ===')
-        for key, value in os.environ.items():
-            if 'cdn' in key.lower() or 'url' in key.lower() or 'input' in key.lower():
-                print(f'{key}: {value}')
+        # HARDCODE THE CDN URL SINCE IT'S NOT BEING PASSED
+        cdn_url = 'https://cdn-new.gov-cloud.ai//_public/pipeline/2accf950-6fbe-4827-9a76-108875bf894d_%24%24_V1_medical_diagnosis_working_balanced.csv'
         
-        # Print current working directory and files
-        print('=== CURRENT DIRECTORY ===')
-        print(f'CWD: {os.getcwd()}')
-        print('Files in current directory:')
-        for file in os.listdir('.'):
-            print(f'  {file}')
-
-        # Get input arguments - FIXED APPROACH
-        # Let's handle the arguments more flexibly
-        print('=== RAW COMMAND LINE ARGUMENTS ===')
-        print(f'Total arguments: {len(sys.argv)}')
-        for i, arg in enumerate(sys.argv):
-            print(f'  sys.argv[{i}]: {arg}')
-
-        # Since the CDN URL is missing, let's try to get it from environment or use a fallback
-        if len(sys.argv) > 1:
-            # Try different argument positions
-            if len(sys.argv) >= 10:
-                # Normal case - all arguments present
-                cdn_url = sys.argv[1]
-                target_column = sys.argv[2]
-                train_split = float(sys.argv[3])
-                shuffle_seed = int(sys.argv[4])
-                model_type = sys.argv[5]
-                train_data_path = sys.argv[6]
-                test_data_path = sys.argv[7]
-                dataset_info_path = sys.argv[8]
-                model_config_path = sys.argv[9]
-            else:
-                # Arguments are shifted - CDN URL is missing
-                print('WARNING: Arguments are shifted. CDN URL may be missing.')
-                # Try to reconstruct arguments
-                if len(sys.argv) >= 9:
-                    # CDN URL is missing, other arguments are shifted
-                    cdn_url = 'https://cdn-new.gov-cloud.ai//_public/pipeline/2accf950-6fbe-4827-9a76-108875bf894d_%24%24_V1_medical_diagnosis_working_balanced.csv'
-                    target_column = sys.argv[1]
-                    train_split = float(sys.argv[2])
-                    shuffle_seed = int(sys.argv[3])
-                    model_type = sys.argv[4]
-                    train_data_path = sys.argv[5]
-                    test_data_path = sys.argv[6]
-                    dataset_info_path = sys.argv[7]
-                    model_config_path = sys.argv[8]
-                else:
-                    print(f'ERROR: Not enough arguments. Expected 9, got {len(sys.argv)-1}')
-                    sys.exit(1)
+        # Get other arguments - they are shifted because CDN URL is missing
+        # sys.argv[1] = target_column (should be cdn_url but it's missing)
+        # sys.argv[2] = train_split (should be target_column)
+        # sys.argv[3] = shuffle_seed (should be train_split)
+        # sys.argv[4] = model_type (should be shuffle_seed)
+        # sys.argv[5] = train_data_path (should be model_type)
+        # etc...
+        
+        if len(sys.argv) >= 9:
+            # Arguments are shifted by 1 because CDN URL is missing
+            target_column = sys.argv[1]
+            train_split = float(sys.argv[2])
+            shuffle_seed = int(sys.argv[3])
+            model_type = sys.argv[4]
+            train_data_path = sys.argv[5]
+            test_data_path = sys.argv[6]
+            dataset_info_path = sys.argv[7]
+            model_config_path = sys.argv[8]
         else:
-            print('ERROR: No arguments provided')
+            print(f'ERROR: Expected 8 arguments, got {len(sys.argv)-1}')
             sys.exit(1)
 
-        print('=== PROCESSED ARGUMENTS ===')
-        print(f'CDN URL: {cdn_url}')
+        print('=== ARGUMENTS ===')
+        print(f'CDN URL (hardcoded): {cdn_url}')
         print(f'Target column: {target_column}')
         print(f'Train split: {train_split}')
         print(f'Shuffle seed: {shuffle_seed}')
         print(f'Model type: {model_type}')
-        print(f'Train data path: {train_data_path}')
-        print(f'Test data path: {test_data_path}')
-        print(f'Dataset info path: {dataset_info_path}')
-        print(f'Model config path: {model_config_path}')
 
         # Model configurations
         MODEL_CONFIGS = {
