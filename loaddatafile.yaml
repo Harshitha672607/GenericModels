@@ -1,5 +1,5 @@
-name: Generic Load Dataset
-description: Loads data and handles different model types automatically with enhanced validation
+name: 8Generic Load Dataset
+description: Loads data and handles different model types automatically
 inputs:
   - name: cdn_url
     type: String
@@ -51,7 +51,6 @@ implementation:
         from urllib.parse import unquote
         from sklearn.model_selection import train_test_split
 
-        # Get input arguments - FIXED: sys.argv[0] is the script name, so we start from 1
         cdn_url = sys.argv[1]
         target_column = sys.argv[2]
         train_split = float(sys.argv[3])
@@ -62,11 +61,12 @@ implementation:
         dataset_info_path = sys.argv[8]
         model_config_path = sys.argv[9]
 
-        print('GENERIC DATA LOADER')
-        print(f'Model Type: {model_type}')
-        print(f'Target Column: {target_column}')
+        print('Generic Data Loader')
+        print(f'CDN URL: {cdn_url}')
+        print(f'Target column: {target_column}')
         print(f'Train split: {train_split}')
         print(f'Shuffle seed: {shuffle_seed}')
+        print(f'Model type: {model_type}')
 
         # Model configurations
         MODEL_CONFIGS = {
@@ -102,15 +102,14 @@ implementation:
         # Download and load data
         decoded_url = unquote(cdn_url)
         try:
-            print('Downloading dataset...')
+            print('Downloading CSV')
             response = requests.get(decoded_url, timeout=30)
             response.raise_for_status()
             df = pd.read_csv(io.BytesIO(response.content))
-            print(f'Loaded dataset with shape: {df.shape}')
-            print(f'Columns: {list(df.columns)}')
+            print(f'Loaded CSV with shape: {df.shape}')
         except Exception as e:
             print(f'Failed to load dataset: {e}')
-            sys.exit(1)
+            raise
 
         # Data validation
         if target_column not in df.columns:
@@ -118,75 +117,39 @@ implementation:
             print(f'Available columns: {list(df.columns)}')
             sys.exit(1)
 
-        # Check for missing values
-        missing_values = df.isnull().sum()
-        if missing_values.any():
-            print(f'Missing values detected:')
-            for col, count in missing_values[missing_values > 0].items():
-                print(f'  {col}: {count} ({count/len(df)*100:.1f}%)')
-
-        # Target analysis
-        original_target_type = df[target_column].dtype
-        unique_values = df[target_column].nunique()
-        
-        print(f'Target analysis:')
-        print(f'  - Original type: {original_target_type}')
-        print(f'  - Unique values: {unique_values}')
-        print(f'  - Sample values: {df[target_column].head(3).tolist()}')
-
-        # Determine problem type
-        problem_type = None
+        # Determine problem type based on model and data
         if model_type == 'logistic_regression':
             problem_type = 'classification'
         elif model_type == 'linear_regression':
             problem_type = 'regression'
         else:  # random_forest - auto-detect
+            unique_values = df[target_column].nunique()
             if df[target_column].dtype in ['object', 'category'] or unique_values <= 10:
                 problem_type = 'classification'
             else:
                 problem_type = 'regression'
 
         MODEL_CONFIGS[model_type]['problem_type'] = problem_type
-        print(f'Determined problem type: {problem_type}')
+        print(f'Problem type: {problem_type}')
 
         # Handle target encoding for classification
-        target_encoding = 'direct'
         if problem_type == 'classification' and df[target_column].dtype in ['object', 'category']:
             print('Encoding categorical target for classification')
             df[target_column] = df[target_column].astype('category').cat.codes
-            target_encoding = 'label_encoded'
+
+        # Shuffle and split data
+        df = df.sample(frac=1, random_state=shuffle_seed).reset_index(drop=True)
+
+        train_size = int(len(df) * train_split)
+        train_df = df.iloc[:train_size]
+        test_df = df.iloc[train_size:]
+
+        print(f'Train shape: {train_df.shape}, Test shape: {test_df.shape}')
 
         # Feature analysis
         feature_columns = [col for col in df.columns if col != target_column]
         numeric_features = df[feature_columns].select_dtypes(include=[np.number]).columns.tolist()
         categorical_features = df[feature_columns].select_dtypes(include=['object', 'category']).columns.tolist()
-
-        print(f'Numeric features: {numeric_features}')
-        print(f'Categorical features: {categorical_features}')
-
-        # Data splitting with stratification for classification
-        stratify = None
-        if problem_type == 'classification' and unique_values > 1:
-            min_class_size = df[target_column].value_counts().min()
-            if min_class_size >= 2:
-                stratify = df[target_column]
-                print('Using stratified sampling for classification')
-
-        # Adjust train_split if needed
-        if train_split > 1.0:
-            print(f'Warning: train_split {train_split} is greater than 1.0, converting to ratio')
-            train_split = train_split / 100.0
-
-        train_split = max(0.1, min(0.9, train_split))
-        
-        train_df, test_df = train_test_split(
-            df, 
-            train_size=train_split, 
-            random_state=shuffle_seed,
-            stratify=stratify
-        )
-
-        print(f'Train set: {train_df.shape}, Test set: {test_df.shape}')
 
         # Prepare dataset info
         dataset_info = {
@@ -200,19 +163,15 @@ implementation:
             'train_split_ratio': train_split,
             'shuffle_seed': shuffle_seed,
             'model_type': model_type,
-            'target_encoding': target_encoding,
-            'original_target_type': str(original_target_type),
             'problem_type': problem_type,
             'columns': list(df.columns),
             'dtypes': {col: str(df[col].dtype) for col in df.columns},
-            'target_distribution': df[target_column].value_counts().to_dict(),
-            'missing_values': missing_values[missing_values > 0].to_dict()
         }
 
         # Get model configuration
         model_config = MODEL_CONFIGS.get(model_type)
 
-        # Save outputs
+        # Ensure directories exist before saving
         os.makedirs(os.path.dirname(train_data_path) or '.', exist_ok=True)
         train_df.to_csv(train_data_path, index=False)
 
@@ -227,11 +186,12 @@ implementation:
         with open(model_config_path, 'w') as f:
             json.dump(model_config, f, indent=2)
 
-        print('Data loading complete!')
+        print('Dataset processing complete!')
         print(f'Train data saved at: {train_data_path}')
         print(f'Test data saved at: {test_data_path}')
-        print(f'Problem type: {problem_type}')
-        " "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9"
+        print(f'Dataset info keys: {list(dataset_info.keys())}')
+        print(f'Model config saved at: {model_config_path}')
+        " "$0" "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8"
     args:
       - {inputValue: cdn_url}
       - {inputValue: target_column}
