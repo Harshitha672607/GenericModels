@@ -1,4 +1,4 @@
-name: 1Genericloaddataset123
+name: 2GenericLoadDataset
 description: Loads data and handles different model types automatically with enhanced validation
 inputs:
   - name: cdn_url
@@ -48,10 +48,9 @@ implementation:
         import requests
         import pickle
         import json
-        
         from urllib.parse import unquote
         from sklearn.model_selection import train_test_split
-  
+
         # Enhanced model configurations
         MODEL_CONFIGS = {
             'linear_regression': {
@@ -104,7 +103,7 @@ implementation:
             }
         }
 
-        # Get input arguments
+        # Get input arguments - FIXED ARGUMENT COUNT
         cdn_url = sys.argv[1]
         target_column = sys.argv[2]
         train_split = float(sys.argv[3])
@@ -203,11 +202,10 @@ implementation:
         MODEL_CONFIGS[model_type]['problem_type'] = problem_type
         print(f'Determined problem type: {problem_type}')
 
-        # Enhanced feature analysis
+        # Enhanced feature analysis - FIXED dtype selection
         feature_columns = [col for col in df.columns if col != target_column]
         
-        numeric_features = df[feature_columns].select_dtypes(include=["number"]).columns.tolist()
-
+        numeric_features = df[feature_columns].select_dtypes(include=[np.number]).columns.tolist()
         categorical_features = df[feature_columns].select_dtypes(include=['object', 'category']).columns.tolist()
 
         # Data splitting with enhanced stratification
@@ -251,10 +249,10 @@ implementation:
             'target_analysis': {
                 'n_unique': int(unique_values),
                 'value_counts': df[target_column].value_counts().to_dict(),
-                'target_mean': float(df[target_column].mean()) if df[target_column].dtype in [np.number] else None,
-                'target_std': float(df[target_column].std()) if df[target_column].dtype in [np.number] else None,
-                'target_min': float(df[target_column].min()) if df[target_column].dtype in [np.number] else None,
-                'target_max': float(df[target_column].max()) if df[target_column].dtype in [np.number] else None
+                'target_mean': float(df[target_column].mean()) if np.issubdtype(df[target_column].dtype, np.number) else None,
+                'target_std': float(df[target_column].std()) if np.issubdtype(df[target_column].dtype, np.number) else None,
+                'target_min': float(df[target_column].min()) if np.issubdtype(df[target_column].dtype, np.number) else None,
+                'target_max': float(df[target_column].max()) if np.issubdtype(df[target_column].dtype, np.number) else None
             },
             'feature_analysis': {
                 'total_features': len(feature_columns),
@@ -264,10 +262,10 @@ implementation:
                 'dtypes': {col: str(df[col].dtype) for col in df.columns},
                 'feature_stats': {
                     col: {
-                        'mean': float(df[col].mean()) if df[col].dtype in [np.number] else None,
-                        'std': float(df[col].std()) if df[col].dtype in [np.number] else None,
-                        'min': float(df[col].min()) if df[col].dtype in [np.number] else None,
-                        'max': float(df[col].max()) if df[col].dtype in [np.number] else None,
+                        'mean': float(df[col].mean()) if np.issubdtype(df[col].dtype, np.number) else None,
+                        'std': float(df[col].std()) if np.issubdtype(df[col].dtype, np.number) else None,
+                        'min': float(df[col].min()) if np.issubdtype(df[col].dtype, np.number) else None,
+                        'max': float(df[col].max()) if np.issubdtype(df[col].dtype, np.number) else None,
                         'n_unique': int(df[col].nunique())
                     } for col in feature_columns
                 }
@@ -277,18 +275,18 @@ implementation:
         # Get model configuration
         model_config = MODEL_CONFIGS.get(model_type, MODEL_CONFIGS['linear_regression'])
 
-        # Save outputs
-        os.makedirs(os.path.dirname(train_data_path) or '.', exist_ok=True)
+        # Save outputs - ensure directories exist
+        os.makedirs(os.path.dirname(train_data_path), exist_ok=True)
         train_df.to_csv(train_data_path, index=False)
 
-        os.makedirs(os.path.dirname(test_data_path) or '.', exist_ok=True)
+        os.makedirs(os.path.dirname(test_data_path), exist_ok=True)
         test_df.to_csv(test_data_path, index=False)
 
-        os.makedirs(os.path.dirname(dataset_info_path) or '.', exist_ok=True)
+        os.makedirs(os.path.dirname(dataset_info_path), exist_ok=True)
         with open(dataset_info_path, 'wb') as f:
             pickle.dump(dataset_info, f)
 
-        os.makedirs(os.path.dirname(model_config_path) or '.', exist_ok=True)
+        os.makedirs(os.path.dirname(model_config_path), exist_ok=True)
         with open(model_config_path, 'w') as f:
             json.dump(model_config, f, indent=2)
 
@@ -297,7 +295,7 @@ implementation:
         print(f'Target encoding: {target_encoding}')
         print(f'Train data saved: {train_data_path}')
         print(f'Test data saved: {test_data_path}')
-        " "$0" "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8"
+        " "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9"
     args:
       - {inputValue: cdn_url}
       - {inputValue: target_column}
