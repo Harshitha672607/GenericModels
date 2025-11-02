@@ -1,4 +1,4 @@
-name: 1Generic Model Evaluation
+name: 2Generic Model Evaluation
 description: Generic evaluation component for regression and classification models
 inputs:
   - name: trained_model
@@ -42,18 +42,13 @@ implementation:
         processed_data_path = sys.argv[2]
         preprocessing_pipeline_path = sys.argv[3]
         training_history_path = sys.argv[4]
-        model_config_str = sys.argv[5]  # Changed from model_config_path to model_config_str
+        model_config_str = sys.argv[5]
         evaluation_metrics_path = sys.argv[6]
         evaluation_report_path = sys.argv[7]
         visualization_data_path = sys.argv[8]
 
         print('Generic Model Evaluation Started')
         print(f'Number of arguments: {len(sys.argv)}')
-        for i, arg in enumerate(sys.argv):
-            if i == 5:  # model_config_str might be long
-                print(f'Argument {i}: {arg[:200]}...')
-            else:
-                print(f'Argument {i}: {arg}')
         
         # Load all artifacts
         print('Loading trained model...')
@@ -72,7 +67,7 @@ implementation:
         with open(training_history_path, 'r') as f:
             training_history = json.load(f)
         
-        # FIX: Parse model_config from string instead of file
+        # Parse model_config from string
         print('Parsing model config...')
         try:
             model_config = json.loads(model_config_str)
@@ -94,6 +89,7 @@ implementation:
         print(f'Test samples: {len(X_test)}')
         print(f'X_test shape: {X_test.shape}')
         print(f'X_test_processed shape: {X_test_processed.shape}')
+        print(f'y_test unique values: {np.unique(y_test)}')
         
         # Make predictions
         print('Making predictions...')
@@ -176,9 +172,17 @@ implementation:
                 metrics['fpr'] = fpr.tolist()
                 metrics['tpr'] = tpr.tolist()
             
+            # FIXED: Convert class labels to strings for dictionary keys
+            print('Calculating class distributions...')
+            unique_classes, class_counts = np.unique(y_test, return_counts=True)
+            class_distribution = {str(cls): int(count) for cls, count in zip(unique_classes, class_counts)}
+            
+            unique_preds, pred_counts = np.unique(y_pred, return_counts=True)
+            predicted_distribution = {str(cls): int(count) for cls, count in zip(unique_preds, pred_counts)}
+            
             target_stats = {
-                'class_distribution': dict(zip(*np.unique(y_test, return_counts=True))),
-                'predicted_distribution': dict(zip(*np.unique(y_pred, return_counts=True)))
+                'class_distribution': class_distribution,
+                'predicted_distribution': predicted_distribution
             }
         
         # Create comprehensive evaluation metrics
@@ -266,7 +270,7 @@ implementation:
       - {inputPath: processed_data}
       - {inputPath: preprocessing_pipeline}
       - {inputPath: training_history}
-      - {inputValue: model_config}  # CHANGED: from inputPath to inputValue
+      - {inputValue: model_config}
       - {outputPath: evaluation_metrics}
       - {outputPath: evaluation_report}
       - {outputPath: visualization_data}
