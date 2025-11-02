@@ -1,0 +1,156 @@
+name: Generic Preprocessing
+description: Preprocesses data based on model type (regression/classification) with appropriate encoding and scaling
+inputs:
+  - name: train_data
+    type: Dataset
+  - name: test_data
+    type: Dataset
+  - name: dataset_info
+    type: DatasetInfo
+  - name: model_config
+    type: String
+outputs:
+  - name: processed_data_pickle
+    type: Dataset
+  - name: preprocessing_pipeline
+    type: Model
+  - name: preprocessing_config
+    type: String
+implementation:
+  container:
+    image: python:3.9
+    command:
+      - sh
+      - -c
+      - |
+        pip install pandas numpy scikit-learn >/dev/null 2>&1
+        python -c "
+        import sys, os, pickle, json, pandas as pd, numpy as np
+        from sklearn.compose import ColumnTransformer
+        from sklearn.preprocessing import StandardScaler, OneHotEncoder, LabelEncoder
+        from sklearn.pipeline import Pipeline
+        from sklearn.impute import SimpleImputer
+
+        # Get arguments
+        train_path = sys.argv[1]
+        test_path = sys.argv[2]
+        info_path = sys.argv[3]
+        config_str = sys.argv[4]
+        out_path = sys.argv[5]
+        pipeline_path = sys.argv[6]
+        config_out_path = sys.argv[7]
+
+        print('Generic Preprocessing Started')
+        
+        # Load data and config
+        train_df = pd.read_csv(train_path)
+        test_df = pd.read_csv(test_path)
+        with open(info_path, 'rb') as f: 
+            dataset_info = pickle.load(f)
+        model_config = json.loads(config_str)
+        
+        # Extract info
+        target_col = dataset_info['metadata']['target_column']
+        numeric_features = dataset_info['metadata']['numeric_features']
+        categorical_features = dataset_info['metadata']['categorical_features']
+        model_type = model_config['model_type']
+        problem_type = model_config['problem_type']
+        
+        print(f'Model: {model_type}, Problem: {problem_type}')
+        print(f'Target: {target_col}')
+        print(f'Numeric features: {numeric_features}')
+        print(f'Categorical features: {categorical_features}')
+        
+        # Prepare features and target
+        X_train = train_df.drop(columns=[target_col])
+        y_train = train_df[target_col]
+        X_test = test_df.drop(columns=[target_col])
+        y_test = test_df[target_col]
+        
+        # Handle target encoding for classification
+        if problem_type == 'classification' and y_train.dtype == 'object':
+            print('Encoding target variable for classification')
+            le = LabelEncoder()
+            y_train = le.fit_transform(y_train)
+            y_test = le.transform(y_test)
+            target_encoder = le
+        else:
+            target_encoder = None
+        
+        # Create preprocessing pipeline based on model type
+        numeric_transformer = Pipeline(steps=[
+            ('imputer', SimpleImputer(strategy='median')),
+            ('scaler', StandardScaler())
+        ])
+        
+        categorical_transformer = Pipeline(steps=[
+            ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
+            ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
+        ])
+        
+        preprocessor = ColumnTransformer(
+            transformers=[
+                ('num', numeric_transformer, numeric_features),
+                ('cat', categorical_transformer, categorical_features),
+            ]
+        )
+        
+        # Fit preprocessing
+        print('Fitting preprocessing pipeline...')
+        X_train_processed = preprocessor.fit_transform(X_train)
+        X_test_processed = preprocessor.transform(X_test)
+        
+        print(f'Processed train shape: {X_train_processed.shape}')
+        print(f'Processed test shape: {X_test_processed.shape}')
+        
+        # Create data wrapper
+        processed_data = {
+            'X_train': X_train,
+            'y_train': y_train,
+            'X_test': X_test, 
+            'y_test': y_test,
+            'X_train_processed': X_train_processed,
+            'X_test_processed': X_test_processed,
+            'preprocessor': preprocessor,
+            'target_encoder': target_encoder,
+            'feature_names': numeric_features + categorical_features,
+            'model_type': model_type,
+            'problem_type': problem_type
+        }
+        
+        # Save outputs
+        os.makedirs(os.path.dirname(out_path) or '.', exist_ok=True)
+        with open(out_path, 'wb') as f:
+            pickle.dump(processed_data, f)
+            
+        os.makedirs(os.path.dirname(pipeline_path) or '.', exist_ok=True)
+        with open(pipeline_path, 'wb') as f:
+            pickle.dump(preprocessor, f)
+            
+        # Save preprocessing config
+        preprocessing_config = {
+            'preprocessing_complete': True,
+            'model_type': model_type,
+            'problem_type': problem_type,
+            'numeric_features': numeric_features,
+            'categorical_features': categorical_features,
+            'target_encoded': target_encoder is not None,
+            'train_samples': len(X_train),
+            'test_samples': len(X_test),
+            'processed_features': X_train_processed.shape[1]
+        }
+        
+        os.makedirs(os.path.dirname(config_out_path) or '.', exist_ok=True)
+        with open(config_out_path, 'w') as f:
+            json.dump(preprocessing_config, f, indent=2)
+            
+        print('Generic preprocessing completed successfully!')
+        " "$0" "$1" "$2" "$3" "$4" "$5" "$6"
+    args:
+      - {inputPath: train_data}
+      - {inputPath: test_data}
+      - {inputPath: dataset_info}
+      - {inputValue: model_config}
+      - {outputPath: processed_data_pickle}
+      - {outputPath: preprocessing_pipeline}
+      - {outputPath: preprocessing_config}
