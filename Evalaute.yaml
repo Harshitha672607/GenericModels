@@ -1,4 +1,4 @@
-name: Generic Model Evaluation
+name: 1Generic Model Evaluation
 description: Generic evaluation component for regression and classification models
 inputs:
   - name: trained_model
@@ -42,28 +42,45 @@ implementation:
         processed_data_path = sys.argv[2]
         preprocessing_pipeline_path = sys.argv[3]
         training_history_path = sys.argv[4]
-        model_config_path = sys.argv[5]
+        model_config_str = sys.argv[5]  # Changed from model_config_path to model_config_str
         evaluation_metrics_path = sys.argv[6]
         evaluation_report_path = sys.argv[7]
         visualization_data_path = sys.argv[8]
 
         print('Generic Model Evaluation Started')
+        print(f'Number of arguments: {len(sys.argv)}')
+        for i, arg in enumerate(sys.argv):
+            if i == 5:  # model_config_str might be long
+                print(f'Argument {i}: {arg[:200]}...')
+            else:
+                print(f'Argument {i}: {arg}')
         
         # Load all artifacts
+        print('Loading trained model...')
         with open(trained_model_path, 'rb') as f:
             model = pickle.load(f)
             
+        print('Loading processed data...')
         with open(processed_data_path, 'rb') as f:
             processed_data = pickle.load(f)
             
+        print('Loading preprocessing pipeline...')
         with open(preprocessing_pipeline_path, 'rb') as f:
             preprocessor = pickle.load(f)
             
+        print('Loading training history...')
         with open(training_history_path, 'r') as f:
             training_history = json.load(f)
-            
-        with open(model_config_path, 'r') as f:
-            model_config = json.load(f)
+        
+        # FIX: Parse model_config from string instead of file
+        print('Parsing model config...')
+        try:
+            model_config = json.loads(model_config_str)
+            print(f'Model config parsed successfully: {model_config}')
+        except json.JSONDecodeError as e:
+            print(f'Error parsing model_config: {e}')
+            print(f'Raw model_config string: {model_config_str[:500]}')
+            raise
         
         # Extract test data
         X_test = processed_data['X_test']
@@ -75,12 +92,16 @@ implementation:
         
         print(f'Evaluating {model_type} for {problem_type} problem')
         print(f'Test samples: {len(X_test)}')
+        print(f'X_test shape: {X_test.shape}')
+        print(f'X_test_processed shape: {X_test_processed.shape}')
         
         # Make predictions
+        print('Making predictions...')
         y_pred = model.predict(X_test_processed)
         
         # Calculate comprehensive metrics based on problem type
         if problem_type == 'regression':
+            print('Calculating regression metrics...')
             # Regression metrics
             r2 = r2_score(y_test, y_pred)
             mae = mean_absolute_error(y_test, y_pred)
@@ -123,6 +144,7 @@ implementation:
             }
             
         else:
+            print('Calculating classification metrics...')
             # Classification metrics
             accuracy = accuracy_score(y_test, y_pred)
             precision = precision_score(y_test, y_pred, average='weighted', zero_division=0)
@@ -146,6 +168,7 @@ implementation:
             
             # For binary classification, calculate ROC AUC if possible
             if len(np.unique(y_test)) == 2 and hasattr(model, 'predict_proba'):
+                print('Calculating ROC AUC...')
                 y_prob = model.predict_proba(X_test_processed)[:, 1]
                 fpr, tpr, _ = roc_curve(y_test, y_prob)
                 roc_auc = auc(fpr, tpr)
@@ -181,18 +204,18 @@ implementation:
         report_lines.append('-' * 30)
         
         if problem_type == 'regression':
-            report_lines.append(f'R² Score: {metrics[\\\"r2_score\\\"]:.3f}')
-            report_lines.append(f'Mean Absolute Error: {metrics[\\\"mae\\\"]:.3f}')
-            report_lines.append(f'Root Mean Squared Error: {metrics[\\\"rmse\\\"]:.3f}')
-            report_lines.append(f'Mean Absolute Percentage Error: {metrics[\\\"mape\\\"]:.1f}%')
-            report_lines.append(f'Explained Variance: {metrics[\\\"explained_variance\\\"]:.3f}')
+            report_lines.append(f'R² Score: {metrics[\"r2_score\"]:.3f}')
+            report_lines.append(f'Mean Absolute Error: {metrics[\"mae\"]:.3f}')
+            report_lines.append(f'Root Mean Squared Error: {metrics[\"rmse\"]:.3f}')
+            report_lines.append(f'Mean Absolute Percentage Error: {metrics[\"mape\"]:.1f}%')
+            report_lines.append(f'Explained Variance: {metrics[\"explained_variance\"]:.3f}')
         else:
-            report_lines.append(f'Accuracy: {metrics[\\\"accuracy\\\"]:.3f}')
-            report_lines.append(f'Precision: {metrics[\\\"precision\\\"]:.3f}')
-            report_lines.append(f'Recall: {metrics[\\\"recall\\\"]:.3f}')
-            report_lines.append(f'F1 Score: {metrics[\\\"f1_score\\\"]:.3f}')
+            report_lines.append(f'Accuracy: {metrics[\"accuracy\"]:.3f}')
+            report_lines.append(f'Precision: {metrics[\"precision\"]:.3f}')
+            report_lines.append(f'Recall: {metrics[\"recall\"]:.3f}')
+            report_lines.append(f'F1 Score: {metrics[\"f1_score\"]:.3f}')
             if 'roc_auc' in metrics:
-                report_lines.append(f'ROC AUC: {metrics[\\\"roc_auc\\\"]:.3f}')
+                report_lines.append(f'ROC AUC: {metrics[\"roc_auc\"]:.3f}')
         
         report_lines.append('')
         report_lines.append('TARGET STATISTICS:')
@@ -218,6 +241,7 @@ implementation:
         }
         
         # Save outputs
+        print('Saving outputs...')
         os.makedirs(os.path.dirname(evaluation_metrics_path) or '.', exist_ok=True)
         with open(evaluation_metrics_path, 'w') as f:
             json.dump(evaluation_metrics, f, indent=2)
@@ -233,16 +257,16 @@ implementation:
         print('Generic Model Evaluation Completed Successfully!')
         print('Key Metrics:')
         if problem_type == 'regression':
-            print(f'  R²: {metrics[\\\"r2_score\\\"]:.3f}, RMSE: {metrics[\\\"rmse\\\"]:.3f}')
+            print(f'  R²: {metrics[\"r2_score\"]:.3f}, RMSE: {metrics[\"rmse\"]:.3f}')
         else:
-            print(f'  Accuracy: {metrics[\\\"accuracy\\\"]:.3f}, F1: {metrics[\\\"f1_score\\\"]:.3f}')
+            print(f'  Accuracy: {metrics[\"accuracy\"]:.3f}, F1: {metrics[\"f1_score\"]:.3f}')
         " "$0" "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8"
     args:
       - {inputPath: trained_model}
       - {inputPath: processed_data}
       - {inputPath: preprocessing_pipeline}
       - {inputPath: training_history}
-      - {inputValue: model_config}
+      - {inputValue: model_config}  # CHANGED: from inputPath to inputValue
       - {outputPath: evaluation_metrics}
       - {outputPath: evaluation_report}
       - {outputPath: visualization_data}
