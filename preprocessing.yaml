@@ -1,4 +1,4 @@
-name: Generic Preprocessing
+name: 1Generic Preprocessing
 description: Preprocesses data based on model type (regression/classification) with appropriate encoding and scaling
 inputs:
   - name: train_data
@@ -42,17 +42,21 @@ implementation:
 
         print('Generic Preprocessing Started')
         
+        # Debug: Print dataset_info structure
+        print('Loading dataset_info...')
+        with open(info_path, 'rb') as f: 
+            dataset_info = pickle.load(f)
+        print(f'dataset_info keys: {list(dataset_info.keys())}')
+        
         # Load data and config
         train_df = pd.read_csv(train_path)
         test_df = pd.read_csv(test_path)
-        with open(info_path, 'rb') as f: 
-            dataset_info = pickle.load(f)
         model_config = json.loads(config_str)
         
-        # Extract info
-        target_col = dataset_info['metadata']['target_column']
-        numeric_features = dataset_info['metadata']['numeric_features']
-        categorical_features = dataset_info['metadata']['categorical_features']
+        # Extract info - FIXED: Direct access without 'metadata' key
+        target_col = dataset_info['target_column']
+        numeric_features = dataset_info['numeric_features']
+        categorical_features = dataset_info['categorical_features']
         model_type = model_config['model_type']
         problem_type = model_config['problem_type']
         
