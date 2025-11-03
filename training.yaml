@@ -1,21 +1,17 @@
-name: 5Generic Model Training
+name: 7Generic Model Training
 description: Generic training component for linear regression, logistic regression, and random forest models with automatic parameter validation
+
 inputs:
-  - name: processed_data
-    type: Dataset
-  - name: preprocessing_pipeline
-    type: Model
-  - name: preprocessing_config
-    type: String
-  - name: model_config
-    type: String
+  - {name: processed_data, type: Dataset}
+  - {name: preprocessing_pipeline, type: Model}
+  - {name: preprocessing_config, type: String}
+  - {name: model_config, type: String}
+
 outputs:
-  - name: trained_model
-    type: Model
-  - name: training_history
-    type: String
-  - name: model_artifacts
-    type: String
+  - {name: trained_model, type: Model}
+  - {name: training_history, type: Metrics}
+  - {name: model_artifacts, type: Metrics}
+
 implementation:
   container:
     image: python:3.9
@@ -23,312 +19,193 @@ implementation:
       - sh
       - -c
       - |
+        set -e
         pip install pandas numpy scikit-learn >/dev/null 2>&1
-        python -c "
-import sys, os, pickle, json, pandas as pd, numpy as np
-from sklearn.linear_model import LinearRegression, LogisticRegression
-from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
-from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error, accuracy_score, classification_report, confusion_matrix
+        python - <<'PYCODE'
+        import sys, os, pickle, json, pandas as pd, numpy as np
+        from sklearn.linear_model import LinearRegression, LogisticRegression
+        from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+        from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error, accuracy_score, classification_report, confusion_matrix
 
-print('=== Generic Model Training Started ===')
-print(f'Python version: {sys.version}')
-print(f'Number of arguments: {len(sys.argv)}')
+        print("=== Generic Model Training Started ===")
+        print(f"Python version: {sys.version}")
+        print(f"Number of arguments: {len(sys.argv)}")
 
-# Get arguments - with better error handling
-try:
-    processed_data_path = sys.argv[1]
-    preprocessing_pipeline_path = sys.argv[2]
-    preprocessing_config_str = sys.argv[3]
-    model_config_str = sys.argv[4]
-    trained_model_path = sys.argv[5]
-    training_history_path = sys.argv[6]
-    model_artifacts_path = sys.argv[7]
-    
-    print(f'Processed data path: {processed_data_path}')
-    print(f'Preprocessing pipeline path: {preprocessing_pipeline_path}')
-    print(f'Trained model output path: {trained_model_path}')
-    print(f'Training history output path: {training_history_path}')
-    print(f'Model artifacts output path: {model_artifacts_path}')
-    
-except IndexError as e:
-    print(f'ERROR: Missing command line arguments: {e}')
-    print('Expected 7 arguments: processed_data_path, preprocessing_pipeline_path, preprocessing_config_str, model_config_str, trained_model_path, training_history_path, model_artifacts_path')
-    sys.exit(1)
+        try:
+            processed_data_path = sys.argv[1]
+            preprocessing_pipeline_path = sys.argv[2]
+            preprocessing_config_str = sys.argv[3]
+            model_config_str = sys.argv[4]
+            trained_model_path = sys.argv[5]
+            training_history_path = sys.argv[6]
+            model_artifacts_path = sys.argv[7]
+        except IndexError as e:
+            print(f"ERROR: Missing arguments: {e}")
+            sys.exit(1)
 
-# Check if input files exist
-print('Checking input files...')
-if not os.path.exists(processed_data_path):
-    print(f'ERROR: Processed data file not found: {processed_data_path}')
-    sys.exit(1)
+        if not os.path.exists(processed_data_path):
+            print(f"ERROR: Processed data not found: {processed_data_path}")
+            sys.exit(1)
 
-if not os.path.exists(preprocessing_pipeline_path):
-    print(f'ERROR: Preprocessing pipeline file not found: {preprocessing_pipeline_path}')
-    sys.exit(1)
+        if not os.path.exists(preprocessing_pipeline_path):
+            print(f"ERROR: Preprocessing pipeline not found: {preprocessing_pipeline_path}")
+            sys.exit(1)
 
-# Load data and configs with error handling
-try:
-    print('Loading processed data...')
-    with open(processed_data_path, 'rb') as f:
-        processed_data = pickle.load(f)
-    print('Processed data loaded successfully')
-    
-    print('Loading preprocessing pipeline...')
-    with open(preprocessing_pipeline_path, 'rb') as f:
-        preprocessor = pickle.load(f)
-    print('Preprocessing pipeline loaded successfully')
-    
-except Exception as e:
-    print(f'ERROR loading files: {e}')
-    sys.exit(1)
+        try:
+            with open(processed_data_path, 'rb') as f:
+                processed_data = pickle.load(f)
+            with open(preprocessing_pipeline_path, 'rb') as f:
+                preprocessor = pickle.load(f)
+        except Exception as e:
+            print(f"ERROR loading files: {e}")
+            sys.exit(1)
 
-# Parse config strings
-try:
-    print('Parsing preprocessing config...')
-    preprocessing_config = json.loads(preprocessing_config_str)
-    print('Preprocessing config parsed successfully')
-    
-    print('Parsing model config...')
-    model_config = json.loads(model_config_str)
-    print('Model config parsed successfully')
-    
-except json.JSONDecodeError as e:
-    print(f'ERROR parsing JSON configs: {e}')
-    print(f'Preprocessing config string: {preprocessing_config_str[:200]}...')
-    print(f'Model config string: {model_config_str[:200]}...')
-    sys.exit(1)
+        try:
+            preprocessing_config = json.loads(preprocessing_config_str)
+            model_config = json.loads(model_config_str)
+        except json.JSONDecodeError as e:
+            print(f"ERROR parsing JSON configs: {e}")
+            sys.exit(1)
 
-# Extract data with validation
-try:
-    X_train = processed_data['X_train']
-    y_train = processed_data['y_train']
-    X_test = processed_data['X_test']
-    y_test = processed_data['y_test']
-    X_train_processed = processed_data['X_train_processed']
-    X_test_processed = processed_data['X_test_processed']
-    
-    print(f'Data extracted: X_train_processed shape: {X_train_processed.shape}, y_train shape: {y_train.shape}')
-    
-except KeyError as e:
-    print(f'ERROR: Missing key in processed_data: {e}')
-    print(f'Available keys: {list(processed_data.keys())}')
-    sys.exit(1)
+        try:
+            X_train = processed_data['X_train']
+            y_train = processed_data['y_train']
+            X_test = processed_data['X_test']
+            y_test = processed_data['y_test']
+            X_train_processed = processed_data['X_train_processed']
+            X_test_processed = processed_data['X_test_processed']
+        except KeyError as e:
+            print(f"Missing key in processed_data: {e}")
+            sys.exit(1)
 
-model_type = model_config['model_type']
-problem_type = model_config['problem_type']
+        model_type = model_config['model_type']
+        problem_type = model_config['problem_type']
+        print(f"Training {model_type} for {problem_type} problem")
 
-print(f'Training {model_type} for {problem_type} problem')
-print(f'Training samples: {len(X_train)}, Test samples: {len(X_test)}')
-print(f'Full model config received: {model_config}')
+        def get_valid_params(config, model_class):
+            valid_params = {}
+            invalid_params = []
+            exclude_params = ['model_type', 'description', 'problem_type']
+            try:
+                temp_model = model_class()
+                for k, v in config.items():
+                    if k not in exclude_params and hasattr(temp_model, k):
+                        valid_params[k] = v
+                    elif k not in exclude_params:
+                        invalid_params.append(k)
+            except Exception as e:
+                print(f"Param validation fallback: {e}")
+                valid_params = {k: v for k, v in config.items() if k not in exclude_params}
+            if invalid_params:
+                print(f"Removed invalid params: {invalid_params}")
+            return valid_params
 
-# Smart parameter filtering function
-def get_valid_params(config, model_class):
-    'Filter out parameters that are not valid for the model class'
-    valid_params = {}
-    invalid_params = []
-    
-    # Parameters to always exclude (metadata, not model parameters)
-    exclude_params = ['model_type', 'description', 'problem_type']
-    
-    # Try to create a temporary instance to check valid parameters
-    try:
-        temp_model = model_class()
-        
-        for key, value in config.items():
-            if key in exclude_params:
-                continue
-            
-            # Check if parameter exists in the model class
-            if hasattr(temp_model, key):
-                valid_params[key] = value
+        try:
+            if model_type == 'linear_regression':
+                valid_params = get_valid_params(model_config, LinearRegression)
+                model = LinearRegression(**valid_params)
+            elif model_type == 'logistic_regression':
+                valid_params = get_valid_params(model_config, LogisticRegression)
+                model = LogisticRegression(**valid_params)
+            elif model_type == 'random_forest':
+                if problem_type == 'regression':
+                    valid_params = get_valid_params(model_config, RandomForestRegressor)
+                    model = RandomForestRegressor(**valid_params)
+                else:
+                    valid_params = get_valid_params(model_config, RandomForestClassifier)
+                    model = RandomForestClassifier(**valid_params)
             else:
-                invalid_params.append(key)
-                
-    except Exception as e:
-        print(f'Warning: Could not validate parameters automatically: {e}')
-        # Fallback: include all parameters except metadata
-        for key, value in config.items():
-            if key not in exclude_params:
-                valid_params[key] = value
-    
-    # Print warnings about removed parameters
-    if invalid_params:
-        print(f'Removing invalid parameters for {model_class.__name__}: {invalid_params}')
-    else:
-        print(f'All parameters are valid for {model_class.__name__}')
-        
-    print(f'Final parameters being used: {valid_params}')
-    return valid_params
+                raise ValueError(f"Unsupported model type: {model_type}")
+        except Exception as e:
+            print(f"ERROR initializing model: {e}")
+            sys.exit(1)
 
-# Initialize model based on type and problem with filtered parameters
-print(f'Initializing {model_type} model...')
+        try:
+            model.fit(X_train_processed, y_train)
+        except Exception as e:
+            print(f"ERROR during training: {e}")
+            sys.exit(1)
 
-try:
-    if model_type == 'linear_regression':
-        valid_params = get_valid_params(model_config, LinearRegression)
-        model = LinearRegression(**valid_params)
-        
-    elif model_type == 'logistic_regression':
-        valid_params = get_valid_params(model_config, LogisticRegression)
-        model = LogisticRegression(**valid_params)
-        
-    elif model_type == 'random_forest':
+        try:
+            y_pred_train = model.predict(X_train_processed)
+            y_pred_test = model.predict(X_test_processed)
+        except Exception as e:
+            print(f"ERROR during prediction: {e}")
+            sys.exit(1)
+
         if problem_type == 'regression':
-            valid_params = get_valid_params(model_config, RandomForestRegressor)
-            model = RandomForestRegressor(**valid_params)
+            metrics = {
+                'train_r2': float(r2_score(y_train, y_pred_train)),
+                'test_r2': float(r2_score(y_test, y_pred_test)),
+                'train_mae': float(mean_absolute_error(y_train, y_pred_train)),
+                'test_mae': float(mean_absolute_error(y_test, y_pred_test)),
+                'train_rmse': float(np.sqrt(mean_squared_error(y_train, y_pred_train))),
+                'test_rmse': float(np.sqrt(mean_squared_error(y_test, y_pred_test)))
+            }
         else:
-            valid_params = get_valid_params(model_config, RandomForestClassifier)
-            model = RandomForestClassifier(**valid_params)
-    else:
-        raise ValueError(f'Unsupported model type: {model_type}')
-        
-    print('Model initialized successfully')
-    
-except Exception as e:
-    print(f'ERROR initializing model: {e}')
-    sys.exit(1)
+            metrics = {
+                'train_accuracy': float(accuracy_score(y_train, y_pred_train)),
+                'test_accuracy': float(accuracy_score(y_test, y_pred_test)),
+                'train_report': classification_report(y_train, y_pred_train, output_dict=True, zero_division=0),
+                'test_report': classification_report(y_test, y_pred_test, output_dict=True, zero_division=0),
+                'train_confusion_matrix': confusion_matrix(y_train, y_pred_train).tolist(),
+                'test_confusion_matrix': confusion_matrix(y_test, y_pred_test).tolist()
+            }
 
-# Train model on processed features
-print('Training model...')
-try:
-    model.fit(X_train_processed, y_train)
-    print('Model training completed successfully!')
-except Exception as e:
-    print(f'ERROR during model training: {e}')
-    sys.exit(1)
+        feature_importance = {}
+        try:
+            if hasattr(model, 'coef_'):
+                names = preprocessor.get_feature_names_out()
+                if len(model.coef_.shape) == 1:
+                    feature_importance = {str(n): float(c) for n, c in zip(names, model.coef_)}
+                else:
+                    for i, coef in enumerate(model.coef_):
+                        feature_importance[f'class_{i}'] = {str(n): float(c) for n, c in zip(names, coef)}
+            elif hasattr(model, 'feature_importances_'):
+                names = preprocessor.get_feature_names_out()
+                feature_importance = {str(n): float(i) for n, i in zip(names, model.feature_importances_)}
+        except Exception as e:
+            print(f"Could not extract feature importance: {e}")
 
-# Make predictions
-try:
-    y_pred_train = model.predict(X_train_processed)
-    y_pred_test = model.predict(X_test_processed)
-    print('Predictions made successfully')
-except Exception as e:
-    print(f'ERROR making predictions: {e}')
-    sys.exit(1)
+        training_history = {
+            'model_type': model_type,
+            'problem_type': problem_type,
+            'training_samples': len(X_train),
+            'test_samples': len(X_test),
+            'metrics': metrics,
+            'feature_importance': feature_importance,
+            'model_config': model_config,
+            'used_parameters': valid_params,
+            'training_completed': True
+        }
 
-# Calculate metrics based on problem type
-if problem_type == 'regression':
-    # Regression metrics
-    train_r2 = r2_score(y_train, y_pred_train)
-    test_r2 = r2_score(y_test, y_pred_test)
-    train_mae = mean_absolute_error(y_train, y_pred_train)
-    test_mae = mean_absolute_error(y_test, y_pred_test)
-    train_rmse = np.sqrt(mean_squared_error(y_train, y_pred_train))
-    test_rmse = np.sqrt(mean_squared_error(y_test, y_pred_test))
-    
-    metrics = {
-        'train_r2': float(train_r2),
-        'test_r2': float(test_r2),
-        'train_mae': float(train_mae),
-        'test_mae': float(test_mae),
-        'train_rmse': float(train_rmse),
-        'test_rmse': float(test_rmse)
-    }
-    
-    print(f'Regression Results:')
-    print(f'   Train R²: {train_r2:.3f}, Test R²: {test_r2:.3f}')
-    print(f'   Train RMSE: {train_rmse:.3f}, Test RMSE: {test_rmse:.3f}')
-    
-else:
-    # Classification metrics
-    train_accuracy = accuracy_score(y_train, y_pred_train)
-    test_accuracy = accuracy_score(y_test, y_pred_test)
-    
-    # Get classification report as dict
-    train_report = classification_report(y_train, y_pred_train, output_dict=True, zero_division=0)
-    test_report = classification_report(y_test, y_pred_test, output_dict=True, zero_division=0)
-    
-    # Confusion matrix
-    train_cm = confusion_matrix(y_train, y_pred_train).tolist()
-    test_cm = confusion_matrix(y_test, y_pred_test).tolist()
-    
-    metrics = {
-        'train_accuracy': float(train_accuracy),
-        'test_accuracy': float(test_accuracy),
-        'train_classification_report': train_report,
-        'test_classification_report': test_report,
-        'train_confusion_matrix': train_cm,
-        'test_confusion_matrix': test_cm
-    }
-    
-    print(f'Classification Results:')
-    print(f'   Train Accuracy: {train_accuracy:.3f}, Test Accuracy: {test_accuracy:.3f}')
+        model_artifacts = {
+            'model_type': model_type,
+            'problem_type': problem_type,
+            'feature_names': preprocessor.get_feature_names_out().tolist(),
+            'training_date': pd.Timestamp.now().isoformat(),
+            'performance_summary': {
+                'metric_name': 'r2_score' if problem_type == 'regression' else 'accuracy',
+                'best_metric': metrics.get('test_r2', metrics.get('test_accuracy'))
+            },
+            'model_parameters_used': valid_params
+        }
 
-# Extract feature importance/coefficients if available
-feature_importance = {}
-try:
-    if hasattr(model, 'coef_'):
-        if len(model.coef_.shape) == 1:
-            # Linear regression or binary classification
-            feature_names = preprocessor.get_feature_names_out()
-            feature_importance = {str(name): float(coef) for name, coef in zip(feature_names, model.coef_)}
-        else:
-            # Multi-class classification
-            feature_names = preprocessor.get_feature_names_out()
-            for i, class_coef in enumerate(model.coef_):
-                feature_importance[f'class_{i}'] = {str(name): float(coef) for name, coef in zip(feature_names, class_coef)}
-                
-    elif hasattr(model, 'feature_importances_'):
-        # Random forest
-        feature_names = preprocessor.get_feature_names_out()
-        feature_importance = {str(name): float(imp) for name, imp in zip(feature_names, model.feature_importances_)}
-        
-    print('Feature importance extracted successfully')
-        
-except Exception as e:
-    print(f'Could not extract feature importance: {e}')
+        try:
+            os.makedirs(os.path.dirname(trained_model_path) or '.', exist_ok=True)
+            with open(trained_model_path, 'wb') as f:
+                pickle.dump(model, f)
+            with open(training_history_path, 'w') as f:
+                json.dump(training_history, f, indent=2)
+            with open(model_artifacts_path, 'w') as f:
+                json.dump(model_artifacts, f, indent=2)
+        except Exception as e:
+            print(f"ERROR saving outputs: {e}")
+            sys.exit(1)
 
-# Create training history
-training_history = {
-    'model_type': model_type,
-    'problem_type': problem_type,
-    'training_samples': len(X_train),
-    'test_samples': len(X_test),
-    'metrics': metrics,
-    'feature_importance': feature_importance,
-    'model_config': model_config,
-    'preprocessing_config': preprocessing_config,
-    'used_parameters': valid_params,
-    'training_completed': True
-}
-
-# Create model artifacts
-model_artifacts = {
-    'model_type': model_type,
-    'problem_type': problem_type,
-    'feature_names': preprocessor.get_feature_names_out().tolist(),
-    'training_date': pd.Timestamp.now().isoformat(),
-    'performance_summary': {
-        'best_metric': max(metrics['test_r2'], metrics['test_accuracy']) if problem_type == 'regression' else metrics['test_accuracy'],
-        'metric_name': 'r2_score' if problem_type == 'regression' else 'accuracy'
-    },
-    'model_parameters_used': valid_params
-}
-
-# Save outputs with better error handling
-print('Saving outputs...')
-try:
-    os.makedirs(os.path.dirname(trained_model_path) or '.', exist_ok=True)
-    with open(trained_model_path, 'wb') as f:
-        pickle.dump(model, f)
-    print(f'Trained model saved to: {trained_model_path}')
-    
-    os.makedirs(os.path.dirname(training_history_path) or '.', exist_ok=True)
-    with open(training_history_path, 'w') as f:
-        json.dump(training_history, f, indent=2)
-    print(f'Training history saved to: {training_history_path}')
-    
-    os.makedirs(os.path.dirname(model_artifacts_path) or '.', exist_ok=True)
-    with open(model_artifacts_path, 'w') as f:
-        json.dump(model_artifacts, f, indent=2)
-    print(f'Model artifacts saved to: {model_artifacts_path}')
-    
-except Exception as e:
-    print(f'ERROR saving outputs: {e}')
-    sys.exit(1)
-
-print('Generic Model Training Completed Successfully!')
-print(f'Model: {model_type}, Problem: {problem_type}')
-        " "$0" "$1" "$2" "$3" "$4" "$5" "$6" "$7"
+        print("Generic Model Training Completed Successfully!")
+        print(f"Model: {model_type}, Problem: {problem_type}")
+        PYCODE
     args:
       - {inputPath: processed_data}
       - {inputPath: preprocessing_pipeline}
