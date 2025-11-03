@@ -1,4 +1,4 @@
-name: 1Generic Model Training
+name: 2Generic Model Training
 description: Generic training component for linear regression, logistic regression, and random forest models with automatic parameter validation
 inputs:
   - name: processed_data
@@ -30,34 +30,92 @@ implementation:
         from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
         from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error, accuracy_score, classification_report, confusion_matrix
 
-        # Get arguments
-        processed_data_path = sys.argv[1]
-        preprocessing_pipeline_path = sys.argv[2]
-        preprocessing_config_str = sys.argv[3]
-        model_config_str = sys.argv[4]
-        trained_model_path = sys.argv[5]
-        training_history_path = sys.argv[6]
-        model_artifacts_path = sys.argv[7]
-
-        print('Generic Model Training Started')
+        print('=== Generic Model Training Started ===')
+        print(f'Python version: {sys.version}')
+        print(f'Number of arguments: {len(sys.argv)}')
         
-        # Load data and configs
-        with open(processed_data_path, 'rb') as f:
-            processed_data = pickle.load(f)
+        # Debug: Print all arguments
+        for i, arg in enumerate(sys.argv):
+            print(f'Argument {i}: {arg}')
         
-        with open(preprocessing_pipeline_path, 'rb') as f:
-            preprocessor = pickle.load(f)
+        # Get arguments - with better error handling
+        try:
+            processed_data_path = sys.argv[1]
+            preprocessing_pipeline_path = sys.argv[2]
+            preprocessing_config_str = sys.argv[3]
+            model_config_str = sys.argv[4]
+            trained_model_path = sys.argv[5]
+            training_history_path = sys.argv[6]
+            model_artifacts_path = sys.argv[7]
             
-        preprocessing_config = json.loads(preprocessing_config_str)
-        model_config = json.loads(model_config_str)
+            print(f'Processed data path: {processed_data_path}')
+            print(f'Preprocessing pipeline path: {preprocessing_pipeline_path}')
+            print(f'Trained model output path: {trained_model_path}')
+            print(f'Training history output path: {training_history_path}')
+            print(f'Model artifacts output path: {model_artifacts_path}')
+            
+        except IndexError as e:
+            print(f'ERROR: Missing command line arguments: {e}')
+            print('Expected 7 arguments: processed_data_path, preprocessing_pipeline_path, preprocessing_config_str, model_config_str, trained_model_path, training_history_path, model_artifacts_path')
+            sys.exit(1)
         
-        # Extract data
-        X_train = processed_data['X_train']
-        y_train = processed_data['y_train']
-        X_test = processed_data['X_test']
-        y_test = processed_data['y_test']
-        X_train_processed = processed_data['X_train_processed']
-        X_test_processed = processed_data['X_test_processed']
+        # Check if input files exist
+        print('Checking input files...')
+        if not os.path.exists(processed_data_path):
+            print(f'ERROR: Processed data file not found: {processed_data_path}')
+            sys.exit(1)
+        
+        if not os.path.exists(preprocessing_pipeline_path):
+            print(f'ERROR: Preprocessing pipeline file not found: {preprocessing_pipeline_path}')
+            sys.exit(1)
+        
+        # Load data and configs with error handling
+        try:
+            print('Loading processed data...')
+            with open(processed_data_path, 'rb') as f:
+                processed_data = pickle.load(f)
+            print('Processed data loaded successfully')
+            
+            print('Loading preprocessing pipeline...')
+            with open(preprocessing_pipeline_path, 'rb') as f:
+                preprocessor = pickle.load(f)
+            print('Preprocessing pipeline loaded successfully')
+            
+        except Exception as e:
+            print(f'ERROR loading files: {e}')
+            sys.exit(1)
+        
+        # Parse config strings
+        try:
+            print('Parsing preprocessing config...')
+            preprocessing_config = json.loads(preprocessing_config_str)
+            print('Preprocessing config parsed successfully')
+            
+            print('Parsing model config...')
+            model_config = json.loads(model_config_str)
+            print('Model config parsed successfully')
+            
+        except json.JSONDecodeError as e:
+            print(f'ERROR parsing JSON configs: {e}')
+            print(f'Preprocessing config string: {preprocessing_config_str[:200]}...')
+            print(f'Model config string: {model_config_str[:200]}...')
+            sys.exit(1)
+        
+        # Extract data with validation
+        try:
+            X_train = processed_data['X_train']
+            y_train = processed_data['y_train']
+            X_test = processed_data['X_test']
+            y_test = processed_data['y_test']
+            X_train_processed = processed_data['X_train_processed']
+            X_test_processed = processed_data['X_test_processed']
+            
+            print(f'Data extracted: X_train_processed shape: {X_train_processed.shape}, y_train shape: {y_train.shape}')
+            
+        except KeyError as e:
+            print(f'ERROR: Missing key in processed_data: {e}')
+            print(f'Available keys: {list(processed_data.keys())}')
+            sys.exit(1)
         
         model_type = model_config['model_type']
         problem_type = model_config['problem_type']
@@ -66,7 +124,7 @@ implementation:
         print(f'Training samples: {len(X_train)}, Test samples: {len(X_test)}')
         print(f'Full model config received: {model_config}')
         
-        # FIXED: Smart parameter filtering function
+        # Smart parameter filtering function
         def get_valid_params(config, model_class):
             \"\"\"Filter out parameters that are not valid for the model class\"\"\"
             valid_params = {}
@@ -98,7 +156,7 @@ implementation:
             
             # Print warnings about removed parameters
             if invalid_params:
-                print(f' Removing invalid parameters for {model_class.__name__}: {invalid_params}')
+                print(f'Removing invalid parameters for {model_class.__name__}: {invalid_params}')
             else:
                 print(f'All parameters are valid for {model_class.__name__}')
                 
@@ -108,32 +166,48 @@ implementation:
         # Initialize model based on type and problem with filtered parameters
         print(f'Initializing {model_type} model...')
         
-        if model_type == 'linear_regression':
-            valid_params = get_valid_params(model_config, LinearRegression)
-            model = LinearRegression(**valid_params)
-            
-        elif model_type == 'logistic_regression':
-            valid_params = get_valid_params(model_config, LogisticRegression)
-            model = LogisticRegression(**valid_params)
-            
-        elif model_type == 'random_forest':
-            if problem_type == 'regression':
-                valid_params = get_valid_params(model_config, RandomForestRegressor)
-                model = RandomForestRegressor(**valid_params)
+        try:
+            if model_type == 'linear_regression':
+                valid_params = get_valid_params(model_config, LinearRegression)
+                model = LinearRegression(**valid_params)
+                
+            elif model_type == 'logistic_regression':
+                valid_params = get_valid_params(model_config, LogisticRegression)
+                model = LogisticRegression(**valid_params)
+                
+            elif model_type == 'random_forest':
+                if problem_type == 'regression':
+                    valid_params = get_valid_params(model_config, RandomForestRegressor)
+                    model = RandomForestRegressor(**valid_params)
+                else:
+                    valid_params = get_valid_params(model_config, RandomForestClassifier)
+                    model = RandomForestClassifier(**valid_params)
             else:
-                valid_params = get_valid_params(model_config, RandomForestClassifier)
-                model = RandomForestClassifier(**valid_params)
-        else:
-            raise ValueError(f'Unsupported model type: {model_type}')
+                raise ValueError(f'Unsupported model type: {model_type}')
+                
+            print('Model initialized successfully')
+            
+        except Exception as e:
+            print(f'ERROR initializing model: {e}')
+            sys.exit(1)
         
         # Train model on processed features
         print('Training model...')
-        model.fit(X_train_processed, y_train)
-        print(' Model training completed successfully!')
+        try:
+            model.fit(X_train_processed, y_train)
+            print('Model training completed successfully!')
+        except Exception as e:
+            print(f'ERROR during model training: {e}')
+            sys.exit(1)
         
         # Make predictions
-        y_pred_train = model.predict(X_train_processed)
-        y_pred_test = model.predict(X_test_processed)
+        try:
+            y_pred_train = model.predict(X_train_processed)
+            y_pred_test = model.predict(X_test_processed)
+            print('Predictions made successfully')
+        except Exception as e:
+            print(f'ERROR making predictions: {e}')
+            sys.exit(1)
         
         # Calculate metrics based on problem type
         if problem_type == 'regression':
@@ -217,7 +291,7 @@ implementation:
             'feature_importance': feature_importance,
             'model_config': model_config,
             'preprocessing_config': preprocessing_config,
-            'used_parameters': valid_params,  # Track which parameters were actually used
+            'used_parameters': valid_params,
             'training_completed': True
         }
         
@@ -234,26 +308,30 @@ implementation:
             'model_parameters_used': valid_params
         }
         
-        # Save outputs
+        # Save outputs with better error handling
         print('Saving outputs...')
-        os.makedirs(os.path.dirname(trained_model_path) or '.', exist_ok=True)
-        with open(trained_model_path, 'wb') as f:
-            pickle.dump(model, f)
+        try:
+            os.makedirs(os.path.dirname(trained_model_path) or '.', exist_ok=True)
+            with open(trained_model_path, 'wb') as f:
+                pickle.dump(model, f)
+            print(f'Trained model saved to: {trained_model_path}')
             
-        os.makedirs(os.path.dirname(training_history_path) or '.', exist_ok=True)
-        with open(training_history_path, 'w') as f:
-            json.dump(training_history, f, indent=2)
+            os.makedirs(os.path.dirname(training_history_path) or '.', exist_ok=True)
+            with open(training_history_path, 'w') as f:
+                json.dump(training_history, f, indent=2)
+            print(f'Training history saved to: {training_history_path}')
             
-        os.makedirs(os.path.dirname(model_artifacts_path) or '.', exist_ok=True)
-        with open(model_artifacts_path, 'w') as f:
-            json.dump(model_artifacts, f, indent=2)
+            os.makedirs(os.path.dirname(model_artifacts_path) or '.', exist_ok=True)
+            with open(model_artifacts_path, 'w') as f:
+                json.dump(model_artifacts, f, indent=2)
+            print(f'Model artifacts saved to: {model_artifacts_path}')
+            
+        except Exception as e:
+            print(f'ERROR saving outputs: {e}')
+            sys.exit(1)
         
-        print(' Generic Model Training Completed Successfully!')
-        print(f' Model: {model_type}, Problem: {problem_type}')
-        print(f' Outputs saved:')
-        print(f'   - Trained model: {trained_model_path}')
-        print(f'   - Training history: {training_history_path}')
-        print(f'   - Model artifacts: {model_artifacts_path}')
+        print('Generic Model Training Completed Successfully!')
+        print(f'Model: {model_type}, Problem: {problem_type}')
         " "$0" "$1" "$2" "$3" "$4" "$5" "$6" "$7"
     args:
       - {inputPath: processed_data}
