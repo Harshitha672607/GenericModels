@@ -1,4 +1,4 @@
-name: 2Generic Model Training
+name: 4Generic Model Training
 description: Generic training component for linear regression, logistic regression, and random forest models with automatic parameter validation
 inputs:
   - name: processed_data
@@ -24,7 +24,8 @@ implementation:
       - -c
       - |
         pip install pandas numpy scikit-learn >/dev/null 2>&1
-        python -c "
+        
+        cat > /tmp/train_script.py << 'EOF'
         import sys, os, pickle, json, pandas as pd, numpy as np
         from sklearn.linear_model import LinearRegression, LogisticRegression
         from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
@@ -126,7 +127,7 @@ implementation:
         
         # Smart parameter filtering function
         def get_valid_params(config, model_class):
-            \"\"\"Filter out parameters that are not valid for the model class\"\"\"
+            """Filter out parameters that are not valid for the model class"""
             valid_params = {}
             invalid_params = []
             
@@ -332,7 +333,9 @@ implementation:
         
         print('Generic Model Training Completed Successfully!')
         print(f'Model: {model_type}, Problem: {problem_type}')
-        " "$0" "$1" "$2" "$3" "$4" "$5" "$6" "$7"
+        EOF
+
+        python /tmp/train_script.py "$1" "$2" "$3" "$4" "$5" "$6" "$7"
     args:
       - {inputPath: processed_data}
       - {inputPath: preprocessing_pipeline}
