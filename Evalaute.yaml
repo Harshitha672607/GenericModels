@@ -1,4 +1,4 @@
-name: 3Generic Model Evaluation
+name: 4Generic Model Evaluation
 description: Generic evaluation component for regression and classification models
 inputs:
   - name: trained_model
@@ -37,6 +37,21 @@ implementation:
         )
         from io import StringIO
 
+        # Custom JSON encoder to handle NumPy types
+        class NumpyEncoder(json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, (np.integer, np.int64, np.int32, np.int16, np.int8)):
+                    return int(obj)
+                elif isinstance(obj, (np.floating, np.float64, np.float32, np.float16)):
+                    return float(obj)
+                elif isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                elif isinstance(obj, np.bool_):
+                    return bool(obj)
+                elif pd.isna(obj):
+                    return None
+                return super().default(obj)
+
         try:
             # Get arguments
             trained_model_path = sys.argv[1]
@@ -49,34 +64,22 @@ implementation:
             visualization_data_path = sys.argv[8]
 
             print('Generic Model Evaluation Started')
-            print(f'Number of arguments: {len(sys.argv)}')
             
             # Load all artifacts
-            print('Loading trained model...')
             with open(trained_model_path, 'rb') as f:
                 model = pickle.load(f)
                 
-            print('Loading processed data...')
             with open(processed_data_path, 'rb') as f:
                 processed_data = pickle.load(f)
                 
-            print('Loading preprocessing pipeline...')
             with open(preprocessing_pipeline_path, 'rb') as f:
                 preprocessor = pickle.load(f)
                 
-            print('Loading training history...')
             with open(training_history_path, 'r') as f:
                 training_history = json.load(f)
             
-            # Parse model_config from string
-            print('Parsing model config...')
-            try:
-                model_config = json.loads(model_config_str)
-                print(f'Model config parsed successfully: {model_config}')
-            except json.JSONDecodeError as e:
-                print(f'Error parsing model_config: {e}')
-                print(f'Raw model_config string: {model_config_str[:500]}')
-                raise
+            # Parse model_config
+            model_config = json.loads(model_config_str)
             
             # Extract test data
             X_test = processed_data['X_test']
@@ -88,20 +91,12 @@ implementation:
             
             print(f'Evaluating {model_type} for {problem_type} problem')
             print(f'Test samples: {len(X_test)}')
-            print(f'X_test shape: {X_test.shape}')
-            print(f'X_test_processed shape: {X_test_processed.shape}')
-            print(f'y_test unique values: {np.unique(y_test)}')
-            print(f'y_test type: {type(y_test)}')
-            print(f'y_test dtype: {y_test.dtype if hasattr(y_test, \\\"dtype\\\") else \\\"No dtype\\\"}')
             
             # Make predictions
-            print('Making predictions...')
             y_pred = model.predict(X_test_processed)
-            print(f'Predictions made successfully, shape: {y_pred.shape}')
             
             # Calculate comprehensive metrics based on problem type
             if problem_type == 'regression':
-                print('Calculating regression metrics...')
                 # Regression metrics
                 r2 = r2_score(y_test, y_pred)
                 mae = mean_absolute_error(y_test, y_pred)
@@ -144,18 +139,15 @@ implementation:
                 }
                 
             else:
-                print('Calculating classification metrics...')
                 # Classification metrics
                 accuracy = accuracy_score(y_test, y_pred)
                 precision = precision_score(y_test, y_pred, average='weighted', zero_division=0)
                 recall = recall_score(y_test, y_pred, average='weighted', zero_division=0)
                 f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
                 
-                print('Getting classification report...')
                 # Detailed classification report
                 class_report = classification_report(y_test, y_pred, output_dict=True, zero_division=0)
                 
-                print('Getting confusion matrix...')
                 # Confusion matrix
                 cm = confusion_matrix(y_test, y_pred)
                 
@@ -170,7 +162,6 @@ implementation:
                 
                 # For binary classification, calculate ROC AUC if possible
                 if len(np.unique(y_test)) == 2 and hasattr(model, 'predict_proba'):
-                    print('Calculating ROC AUC...')
                     y_prob = model.predict_proba(X_test_processed)[:, 1]
                     fpr, tpr, _ = roc_curve(y_test, y_prob)
                     roc_auc = auc(fpr, tpr)
@@ -178,8 +169,7 @@ implementation:
                     metrics['fpr'] = fpr.tolist()
                     metrics['tpr'] = tpr.tolist()
                 
-                # FIXED: Convert class labels to strings for dictionary keys
-                print('Calculating class distributions...')
+                # Class distributions
                 unique_classes, class_counts = np.unique(y_test, return_counts=True)
                 class_distribution = {str(cls): int(count) for cls, count in zip(unique_classes, class_counts)}
                 
@@ -191,7 +181,6 @@ implementation:
                     'predicted_distribution': predicted_distribution
                 }
             
-            print('Creating evaluation metrics...')
             # Create comprehensive evaluation metrics
             evaluation_metrics = {
                 'model_type': model_type,
@@ -203,7 +192,6 @@ implementation:
                 'evaluation_timestamp': pd.Timestamp.now().isoformat()
             }
             
-            print('Creating evaluation report...')
             # Create detailed evaluation report
             report_lines = []
             report_lines.append('GENERIC MODEL EVALUATION REPORT')
@@ -242,7 +230,6 @@ implementation:
             
             evaluation_report = '\\n'.join(report_lines)
             
-            print('Creating visualization data...')
             # Create visualization data
             visualization_data = {
                 'model_type': model_type,
@@ -250,14 +237,13 @@ implementation:
                 'y_true': y_test.tolist() if hasattr(y_test, 'tolist') else list(y_test),
                 'y_pred': y_pred.tolist() if hasattr(y_pred, 'tolist') else list(y_pred),
                 'metrics': metrics,
-                'feature_names': preprocessor.get_feature_names_out().tolist()
+                'feature_names': preprocessor.get_feature_names_out().tolist() if hasattr(preprocessor, 'get_feature_names_out') else []
             }
             
-            # Save outputs
-            print('Saving outputs...')
+            # Save outputs using NumpyEncoder
             os.makedirs(os.path.dirname(evaluation_metrics_path) or '.', exist_ok=True)
             with open(evaluation_metrics_path, 'w') as f:
-                json.dump(evaluation_metrics, f, indent=2)
+                json.dump(evaluation_metrics, f, indent=2, cls=NumpyEncoder)
                 
             os.makedirs(os.path.dirname(evaluation_report_path) or '.', exist_ok=True)
             with open(evaluation_report_path, 'w') as f:
@@ -265,7 +251,7 @@ implementation:
                 
             os.makedirs(os.path.dirname(visualization_data_path) or '.', exist_ok=True)
             with open(visualization_data_path, 'w') as f:
-                json.dump(visualization_data, f, indent=2)
+                json.dump(visualization_data, f, indent=2, cls=NumpyEncoder)
             
             print('Generic Model Evaluation Completed Successfully!')
             print('Key Metrics:')
@@ -276,36 +262,31 @@ implementation:
                 
         except Exception as e:
             print(f'ERROR in evaluation component: {e}')
-            print(f'Error type: {type(e)}')
             import traceback
             print(f'Traceback: {traceback.format_exc()}')
             
             # Create minimal output files to avoid pipeline failure
-            try:
-                error_metrics = {
-                    'error': str(e),
-                    'error_type': str(type(e)),
-                    'model_type': model_type if 'model_type' in locals() else 'unknown',
-                    'problem_type': problem_type if 'problem_type' in locals() else 'unknown',
-                    'evaluation_timestamp': pd.Timestamp.now().isoformat()
-                }
+            error_metrics = {
+                'error': str(e),
+                'error_type': str(type(e)),
+                'model_type': model_type if 'model_type' in locals() else 'unknown',
+                'problem_type': problem_type if 'problem_type' in locals() else 'unknown',
+                'evaluation_timestamp': pd.Timestamp.now().isoformat()
+            }
+            
+            os.makedirs(os.path.dirname(evaluation_metrics_path) or '.', exist_ok=True)
+            with open(evaluation_metrics_path, 'w') as f:
+                json.dump(error_metrics, f, indent=2, cls=NumpyEncoder)
                 
-                os.makedirs(os.path.dirname(evaluation_metrics_path) or '.', exist_ok=True)
-                with open(evaluation_metrics_path, 'w') as f:
-                    json.dump(error_metrics, f, indent=2)
-                    
-                os.makedirs(os.path.dirname(evaluation_report_path) or '.', exist_ok=True)
-                with open(evaluation_report_path, 'w') as f:
-                    f.write(f'ERROR: {e}')
-                    
-                os.makedirs(os.path.dirname(visualization_data_path) or '.', exist_ok=True)
-                with open(visualization_data_path, 'w') as f:
-                    json.dump({'error': str(e)}, f, indent=2)
-                    
-            except Exception as save_error:
-                print(f'Failed to save error outputs: {save_error}')
+            os.makedirs(os.path.dirname(evaluation_report_path) or '.', exist_ok=True)
+            with open(evaluation_report_path, 'w') as f:
+                f.write(f'ERROR: {e}')
                 
-            raise  # Re-raise the original error
+            os.makedirs(os.path.dirname(visualization_data_path) or '.', exist_ok=True)
+            with open(visualization_data_path, 'w') as f:
+                json.dump({'error': str(e)}, f, indent=2, cls=NumpyEncoder)
+                
+            raise
         
         " "$0" "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8"
     args:
