@@ -1,4 +1,4 @@
-name: Pgeneric Model Training
+name: 3Pgeneric Model Training
 description: Generic training component for linear regression, logistic regression, and random forest models with automatic parameter validation
 
 inputs:
@@ -30,6 +30,21 @@ implementation:
         from sklearn.linear_model import LogisticRegression, LinearRegression
         from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
         from sklearn.metrics import accuracy_score, mean_squared_error, classification_report
+
+        # Custom JSON encoder to handle NumPy types
+        class NumpyEncoder(json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, (np.integer, np.int64, np.int32, np.int16, np.int8)):
+                    return int(obj)
+                elif isinstance(obj, (np.floating, np.float64, np.float32, np.float16)):
+                    return float(obj)
+                elif isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                elif isinstance(obj, np.bool_):
+                    return bool(obj)
+                elif pd.isna(obj):
+                    return None
+                return super().default(obj)
 
         # Get arguments
         processed_data_path = sys.argv[1]
@@ -82,14 +97,14 @@ implementation:
             elif model_type == 'random_forest':
                 model = models['random_forest_classifier']
             else:
-                model = models['logistic_regression']  # default
+                model = models['logistic_regression']  
         else:  # regression
             if model_type == 'linear_regression':
                 model = models['linear_regression']
             elif model_type == 'random_forest':
                 model = models['random_forest_regressor']
             else:
-                model = models['linear_regression']  # default
+                model = models['linear_regression'] 
 
         # Train model
         print(f'Training {model_type} for {problem_type} problem...')
@@ -98,7 +113,7 @@ implementation:
         # Make predictions
         y_pred = model.predict(X_test)
 
-        # Calculate metrics
+        # Calculate metrics - CONVERT ALL NUMPY TYPES TO NATIVE PYTHON TYPES
         training_history = {}
         if problem_type == 'classification':
             accuracy = accuracy_score(y_test, y_pred)
@@ -106,10 +121,10 @@ implementation:
                 'model_type': model_type,
                 'problem_type': problem_type,
                 'accuracy': float(accuracy),
-                'feature_names': feature_names,
-                'classes': list(model.classes_) if hasattr(model, 'classes_') else [],
-                'train_samples': len(X_train),
-                'test_samples': len(X_test)
+                'feature_names': [str(f) for f in feature_names],  
+                'classes': [str(cls) for cls in model.classes_] if hasattr(model, 'classes_') else [],
+                'train_samples': int(len(X_train)),  
+                'test_samples': int(len(X_test))     
             }
             print(f'Test Accuracy: {accuracy:.4f}')
         else:
@@ -119,9 +134,9 @@ implementation:
                 'problem_type': problem_type,
                 'mse': float(mse),
                 'rmse': float(mse ** 0.5),
-                'feature_names': feature_names,
-                'train_samples': len(X_train),
-                'test_samples': len(X_test)
+                'feature_names': [str(f) for f in feature_names],  
+                'train_samples': int(len(X_train)),  
+                'test_samples': int(len(X_test))     
             }
             print(f'Test MSE: {mse:.4f}')
             print(f'Test RMSE: {mse ** 0.5:.4f}')
@@ -133,7 +148,7 @@ implementation:
 
         os.makedirs(os.path.dirname(history_output_path) or '.', exist_ok=True)
         with open(history_output_path, 'w') as f:
-            json.dump(training_history, f, indent=2)
+            json.dump(training_history, f, indent=2, cls=NumpyEncoder)  
 
         print('Training completed successfully!')
         print(f'Model saved to: {model_output_path}')
