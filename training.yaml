@@ -1,4 +1,4 @@
-name: Sgeneric Model Training
+name: Pgeneric Model Training
 description: Generic training component for linear regression, logistic regression, and random forest models with automatic parameter validation
 
 inputs:
@@ -126,7 +126,7 @@ implementation:
             print(f'Test MSE: {mse:.4f}')
             print(f'Test RMSE: {mse ** 0.5:.4f}')
 
-        # Save outputs
+        # Save outputs with correct names
         os.makedirs(os.path.dirname(model_output_path) or '.', exist_ok=True)
         with open(model_output_path, 'wb') as f:
             pickle.dump(model, f)
@@ -135,8 +135,10 @@ implementation:
         with open(history_output_path, 'w') as f:
             json.dump(training_history, f, indent=2)
 
-        print('Generic Model Training completed successfully!')
-        " "$0" "$1" "$2" "$3" "$4" "$5"
+        print('Training completed successfully!')
+        print(f'Model saved to: {model_output_path}')
+        print(f'Training history saved to: {history_output_path}')
+        " "$0" "$1" "$2" "$3" "$4" "$5" "$6"
     args:
       - {inputPath: processed_data}
       - {inputPath: preprocessing_pipeline}
