@@ -1,5 +1,5 @@
-name: Generic Model Training
-description: Generic training component for linear regression, logistic regression, and random forest models
+name: 1Generic Model Training
+description: Generic training component for linear regression, logistic regression, and random forest models with automatic parameter validation
 inputs:
   - name: processed_data
     type: Dataset
@@ -64,25 +64,72 @@ implementation:
         
         print(f'Training {model_type} for {problem_type} problem')
         print(f'Training samples: {len(X_train)}, Test samples: {len(X_test)}')
+        print(f'Full model config received: {model_config}')
         
-        # Initialize model based on type and problem
+        # FIXED: Smart parameter filtering function
+        def get_valid_params(config, model_class):
+            \"\"\"Filter out parameters that are not valid for the model class\"\"\"
+            valid_params = {}
+            invalid_params = []
+            
+            # Parameters to always exclude (metadata, not model parameters)
+            exclude_params = ['model_type', 'description', 'problem_type']
+            
+            # Try to create a temporary instance to check valid parameters
+            try:
+                temp_model = model_class()
+                
+                for key, value in config.items():
+                    if key in exclude_params:
+                        continue
+                    
+                    # Check if parameter exists in the model class
+                    if hasattr(temp_model, key):
+                        valid_params[key] = value
+                    else:
+                        invalid_params.append(key)
+                        
+            except Exception as e:
+                print(f'Warning: Could not validate parameters automatically: {e}')
+                # Fallback: include all parameters except metadata
+                for key, value in config.items():
+                    if key not in exclude_params:
+                        valid_params[key] = value
+            
+            # Print warnings about removed parameters
+            if invalid_params:
+                print(f' Removing invalid parameters for {model_class.__name__}: {invalid_params}')
+            else:
+                print(f'All parameters are valid for {model_class.__name__}')
+                
+            print(f'Final parameters being used: {valid_params}')
+            return valid_params
+        
+        # Initialize model based on type and problem with filtered parameters
+        print(f'Initializing {model_type} model...')
+        
         if model_type == 'linear_regression':
-            model = LinearRegression(**{k: v for k, v in model_config.items() if k not in ['model_type', 'description', 'problem_type']})
+            valid_params = get_valid_params(model_config, LinearRegression)
+            model = LinearRegression(**valid_params)
             
         elif model_type == 'logistic_regression':
-            model = LogisticRegression(**{k: v for k, v in model_config.items() if k not in ['model_type', 'description', 'problem_type']})
+            valid_params = get_valid_params(model_config, LogisticRegression)
+            model = LogisticRegression(**valid_params)
             
         elif model_type == 'random_forest':
             if problem_type == 'regression':
-                model = RandomForestRegressor(**{k: v for k, v in model_config.items() if k not in ['model_type', 'description', 'problem_type']})
+                valid_params = get_valid_params(model_config, RandomForestRegressor)
+                model = RandomForestRegressor(**valid_params)
             else:
-                model = RandomForestClassifier(**{k: v for k, v in model_config.items() if k not in ['model_type', 'description', 'problem_type']})
+                valid_params = get_valid_params(model_config, RandomForestClassifier)
+                model = RandomForestClassifier(**valid_params)
         else:
             raise ValueError(f'Unsupported model type: {model_type}')
         
         # Train model on processed features
         print('Training model...')
         model.fit(X_train_processed, y_train)
+        print(' Model training completed successfully!')
         
         # Make predictions
         y_pred_train = model.predict(X_train_processed)
@@ -107,14 +154,18 @@ implementation:
                 'test_rmse': float(test_rmse)
             }
             
+            print(f'Regression Results:')
+            print(f'   Train R²: {train_r2:.3f}, Test R²: {test_r2:.3f}')
+            print(f'   Train RMSE: {train_rmse:.3f}, Test RMSE: {test_rmse:.3f}')
+            
         else:
             # Classification metrics
             train_accuracy = accuracy_score(y_train, y_pred_train)
             test_accuracy = accuracy_score(y_test, y_pred_test)
             
             # Get classification report as dict
-            train_report = classification_report(y_train, y_pred_train, output_dict=True)
-            test_report = classification_report(y_test, y_pred_test, output_dict=True)
+            train_report = classification_report(y_train, y_pred_train, output_dict=True, zero_division=0)
+            test_report = classification_report(y_test, y_pred_test, output_dict=True, zero_division=0)
             
             # Confusion matrix
             train_cm = confusion_matrix(y_train, y_pred_train).tolist()
@@ -128,6 +179,9 @@ implementation:
                 'train_confusion_matrix': train_cm,
                 'test_confusion_matrix': test_cm
             }
+            
+            print(f'Classification Results:')
+            print(f'   Train Accuracy: {train_accuracy:.3f}, Test Accuracy: {test_accuracy:.3f}')
         
         # Extract feature importance/coefficients if available
         feature_importance = {}
@@ -136,17 +190,19 @@ implementation:
                 if len(model.coef_.shape) == 1:
                     # Linear regression or binary classification
                     feature_names = preprocessor.get_feature_names_out()
-                    feature_importance = dict(zip(feature_names, model.coef_))
+                    feature_importance = {str(name): float(coef) for name, coef in zip(feature_names, model.coef_)}
                 else:
                     # Multi-class classification
                     feature_names = preprocessor.get_feature_names_out()
                     for i, class_coef in enumerate(model.coef_):
-                        feature_importance[f'class_{i}'] = dict(zip(feature_names, class_coef))
+                        feature_importance[f'class_{i}'] = {str(name): float(coef) for name, coef in zip(feature_names, class_coef)}
                         
             elif hasattr(model, 'feature_importances_'):
                 # Random forest
                 feature_names = preprocessor.get_feature_names_out()
-                feature_importance = dict(zip(feature_names, model.feature_importances_))
+                feature_importance = {str(name): float(imp) for name, imp in zip(feature_names, model.feature_importances_)}
+                
+            print('Feature importance extracted successfully')
                 
         except Exception as e:
             print(f'Could not extract feature importance: {e}')
@@ -160,7 +216,9 @@ implementation:
             'metrics': metrics,
             'feature_importance': feature_importance,
             'model_config': model_config,
-            'preprocessing_config': preprocessing_config
+            'preprocessing_config': preprocessing_config,
+            'used_parameters': valid_params,  # Track which parameters were actually used
+            'training_completed': True
         }
         
         # Create model artifacts
@@ -172,10 +230,12 @@ implementation:
             'performance_summary': {
                 'best_metric': max(metrics['test_r2'], metrics['test_accuracy']) if problem_type == 'regression' else metrics['test_accuracy'],
                 'metric_name': 'r2_score' if problem_type == 'regression' else 'accuracy'
-            }
+            },
+            'model_parameters_used': valid_params
         }
         
         # Save outputs
+        print('Saving outputs...')
         os.makedirs(os.path.dirname(trained_model_path) or '.', exist_ok=True)
         with open(trained_model_path, 'wb') as f:
             pickle.dump(model, f)
@@ -188,12 +248,12 @@ implementation:
         with open(model_artifacts_path, 'w') as f:
             json.dump(model_artifacts, f, indent=2)
         
-        print('Generic Model Training Completed Successfully!')
-        print(f'Model: {model_type}, Problem: {problem_type}')
-        if problem_type == 'regression':
-            print(f'Test R²: {metrics[\\\"test_r2\\\"]:.3f}, Test RMSE: {metrics[\\\"test_rmse\\\"]:.3f}')
-        else:
-            print(f'Test Accuracy: {metrics[\\\"test_accuracy\\\"]:.3f}')
+        print(' Generic Model Training Completed Successfully!')
+        print(f' Model: {model_type}, Problem: {problem_type}')
+        print(f' Outputs saved:')
+        print(f'   - Trained model: {trained_model_path}')
+        print(f'   - Training history: {training_history_path}')
+        print(f'   - Model artifacts: {model_artifacts_path}')
         " "$0" "$1" "$2" "$3" "$4" "$5" "$6" "$7"
     args:
       - {inputPath: processed_data}
